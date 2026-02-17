@@ -10,10 +10,41 @@
         .header { text-align: center; margin-bottom: 20px; }
         h2 { color: #003366; margin: 0; }
         h1 { color: #1a73e8; margin: 5px 0; font-size: 1.4rem; }
-        .video-container { position: relative; width: 100%; max-width: 500px; border-radius: 15px; overflow: hidden; box-shadow: 0 8px 20px rgba(0,0,0,0.2); background: #222; }
-        video { width: 100%; display: block; transform: scaleX(-1); } /* Mirror mode สำหรับกล้องหน้า */
-        canvas { position: absolute; top: 0; left: 0; transform: scaleX(-1); }
-        .status-pill { margin-top: 20px; padding: 12px 25px; background: white; border-radius: 30px; border: 2px solid #1a73e8; font-weight: bold; font-size: 1.1rem; color: #333; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        
+        .video-container { 
+            position: relative; 
+            width: 100%; 
+            max-width: 500px; 
+            border-radius: 20px; 
+            overflow: hidden; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2); 
+            background: #000; 
+        }
+
+        /* เอา transform: scaleX(-1) ออกเพื่อให้ภาพไม่กลับด้าน */
+        video { 
+            width: 100%; 
+            display: block; 
+        }
+        
+        canvas { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+        }
+
+        .status-box { 
+            margin-top: 20px; 
+            padding: 15px 30px; 
+            background: white; 
+            border-radius: 50px; 
+            border: 2px solid #1a73e8; 
+            font-weight: bold; 
+            font-size: 1.2rem; 
+            color: #333; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -27,7 +58,7 @@
         <video id="video" autoplay muted playsinline></video>
     </div>
 
-    <div class="status-pill" id="status">กำลังสตาร์ทระบบ AI...</div>
+    <div class="status-box" id="status">กำลังเชื่อมต่อ AI...</div>
 
     <script>
         const video = document.getElementById('video');
@@ -35,35 +66,24 @@
 
         const emotionThai = {
             neutral: "ปกติ 😐", happy: "มีความสุข 😊", sad: "เศร้า 😢",
-            angry: "โกรธ 😠", fearful: "กลัว 😨", disgusted: "รังเกียจ 🤢", surprised: "ตกใจ 😲"
+            angry: "โกรธ 😠", fearful: "กลัว 😨", disgusted: "เซ็ง 🤢", surprised: "ตกใจ 😲"
         };
 
-        async function initAI() {
-            // แหล่งโหลด Model ที่เสถียร (vladmandic models)
+        async function startApp() {
             const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
-            
             try {
-                statusText.innerText = "1/2 กำลังโหลดโมเดลใบหน้า...";
+                statusText.innerText = "กำลังโหลดสมองกล AI...";
                 await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-                statusText.innerText = "2/2 กำลังโหลดโมเดลอารมณ์...";
                 await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
                 
-                statusText.innerText = "โหลด AI เสร็จแล้ว! กำลังเปิดกล้อง...";
-                setupCamera();
-            } catch (err) {
-                statusText.innerText = "❌ โหลด AI ไม่สำเร็จ โปรดรีเฟรชหน้าจอ";
-                console.error("Model Load Error:", err);
-            }
-        }
-
-        async function setupCamera() {
-            try {
+                statusText.innerText = "เปิดกล้อง...";
                 const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "user", width: 640, height: 480 } 
+                    video: { facingMode: "user" } 
                 });
                 video.srcObject = stream;
             } catch (err) {
-                statusText.innerText = "❌ เข้าถึงกล้องไม่ได้ (โปรดกดอนุญาต)";
+                statusText.innerText = "❌ เกิดข้อผิดพลาด: โปรดรีเฟรชหน้าจอ";
+                console.error(err);
             }
         }
 
@@ -81,21 +101,20 @@
                 const resizedDetections = faceapi.resizeResults(detections, displaySize);
                 canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
                 
-                // วาดกรอบสี่เหลี่ยมรอบหน้า
+                // วาดกรอบ (ไม่ต้องกลับด้าน canvas แล้ว)
                 faceapi.draw.drawDetections(canvas, resizedDetections);
 
                 if (detections.length > 0) {
                     const expressions = detections[0].expressions;
                     const topEmotion = Object.keys(expressions).reduce((a, b) => expressions[a] > expressions[b] ? a : b);
-                    statusText.innerText = "สถานะ: " + emotionThai[topEmotion];
+                    statusText.innerText = "วันนี้คุณ: " + emotionThai[topEmotion];
                 } else {
-                    statusText.innerText = "มองมาที่กล้องเพื่อตรวจจับความสุข";
+                    statusText.innerText = "ส่องกล้องมาที่ใบหน้าได้เลย";
                 }
-            }, 400);
+            }, 300);
         });
 
-        // เริ่มต้นเมื่อโหลดหน้าเว็บ
-        window.onload = initAI;
+        window.onload = startApp;
     </script>
 </body>
 </html>
