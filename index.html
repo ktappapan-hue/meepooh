@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบตรวจเช็คความสุขนักเรียน ม.2/1</title>
+    <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.min.js"></script>
+    <style>
+        body {
+            font-family: 'Sarabun', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 20px;
+        }
+        h1, h2 { color: #1a73e8; text-align: center; }
+        .container {
+            position: relative;
+            width: 90%;
+            max-width: 640px;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            background: #000;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        video {
+            width: 100%;
+            display: block;
+        }
+        .status {
+            margin-top: 15px;
+            padding: 10px 20px;
+            background: #fff;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>โรงเรียนปราจิณราษฎรอำรุง</h2>
+    <h1>ระบบตรวจเช็คความสุขประจำวันของนักเรียนชั้น ม.2/1</h1>
+
+    <div class="container" id="container">
+        <video id="video" autoplay muted playsinline></video>
+    </div>
+
+    <div class="status" id="status">กำลังโหลด AI... โปรดรอสักครู่</div>
+
+    <script>
+        const video = document.getElementById('video');
+        const statusText = document.getElementById('status');
+
+        // แปลผลอารมณ์เป็นภาษาไทย
+        const emotionThai = {
+            neutral: "ปกติ 😐",
+            happy: "มีความสุข/ดีใจ 😊",
+            sad: "เศร้า/เสียใจ 😢",
+            angry: "โกรธ 😠",
+            fearful: "กลัว 😨",
+            disgusted: "เซ็ง/รังเกียจ 🤢",
+            surprised: "ตกใจ 😲"
+        };
+
+        // โหลด Model ของ AI
+        async function startApp() {
+            const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+            
+            await face-api.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+            await face-api.nets.faceExpressionNet.loadFromUri(MODEL_URL);
+            
+            statusText.innerText = "เปิดกล้อง...";
+            startVideo();
+        }
+
+        // เริ่มต้นใช้งานกล้อง
+        function startVideo() {
+            navigator.mediaDevices.getUserMedia({ video: {} })
+                .then(stream => {
+                    video.srcObject = stream;
+                    statusText.innerText = "ระบบพร้อมใช้งาน";
+                })
+                .catch(err => {
+                    console.error(err);
+                    statusText.innerText = "ไม่สามารถเข้าถึงกล้องได้";
+                });
+        }
+
+        video.addEventListener('play', () => {
+            const canvas = face-api.createCanvasFromMedia(video);
+            document.getElementById('container').append(canvas);
+            
+            const displaySize = { width: video.clientWidth, height: video.clientHeight };
+            face-api.matchDimensions(canvas, displaySize);
+
+            setInterval(async () => {
+                const detections = await face-api.detectAllFaces(video, new face-api.TinyFaceDetectorOptions())
+                    .withFaceExpressions();
+
+                const resizedDetections = face-api.resizeResults(detections, displaySize);
+                canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+                
+                // วาดเส้นกรอบใบหน้า
+                face-api.draw.drawDetections(canvas, resizedDetections);
+
+                if (detections.length > 0) {
+                    // หาอารมณ์ที่มีค่าคะแนนสูงสุด
+                    const expressions = detections[0].expressions;
+                    const maxValue = Math.max(...Object.values(expressions));
+                    const emotion = Object.keys(expressions).filter(item => expressions[item] === maxValue);
+                    
+                    statusText.innerText = `อารมณ์ปัจจุบัน: ${emotionThai[emotion[0]] || emotion[0]}`;
+                }
+            }, 200);
+        });
+
+        startApp();
+    </script>
+</body>
+</html>
