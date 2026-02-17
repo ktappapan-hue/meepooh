@@ -6,25 +6,28 @@
     <title>ระบบตรวจเช็คความสุขนักเรียน ม.2/1</title>
     <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.min.js"></script>
     <style>
-        body { font-family: 'Sarabun', sans-serif; display: flex; flex-direction: column; align-items: center; background-color: #f8f9fa; margin: 0; padding: 20px; }
-        h2 { color: #003366; margin-bottom: 5px; }
-        h1 { color: #1a73e8; margin-top: 0; text-align: center; font-size: 1.5rem; }
-        .container { position: relative; width: 100%; max-width: 500px; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.1); background: #000; }
-        video { width: 100%; display: block; }
-        canvas { position: absolute; top: 0; left: 0; }
-        .status-box { margin-top: 20px; padding: 15px 30px; background: white; border-radius: 50px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); font-size: 1.2rem; font-weight: bold; color: #333; border: 2px solid #1a73e8; }
+        body { font-family: 'Sarabun', sans-serif; display: flex; flex-direction: column; align-items: center; background-color: #f0f4f8; margin: 0; padding: 20px; }
+        .header { text-align: center; margin-bottom: 20px; }
+        h2 { color: #003366; margin: 0; }
+        h1 { color: #1a73e8; margin: 5px 0; font-size: 1.4rem; }
+        .video-container { position: relative; width: 100%; max-width: 500px; border-radius: 15px; overflow: hidden; box-shadow: 0 8px 20px rgba(0,0,0,0.2); background: #222; }
+        video { width: 100%; display: block; transform: scaleX(-1); } /* Mirror mode สำหรับกล้องหน้า */
+        canvas { position: absolute; top: 0; left: 0; transform: scaleX(-1); }
+        .status-pill { margin-top: 20px; padding: 12px 25px; background: white; border-radius: 30px; border: 2px solid #1a73e8; font-weight: bold; font-size: 1.1rem; color: #333; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
     </style>
 </head>
 <body>
 
-    <h2>โรงเรียนปราจิณราษฎรอำรุง</h2>
-    <h1>ระบบตรวจเช็คความสุขประจำวัน ม.2/1</h1>
+    <div class="header">
+        <h2>โรงเรียนปราจิณราษฎรอำรุง</h2>
+        <h1>ระบบตรวจเช็คความสุขประจำวัน ม.2/1</h1>
+    </div>
 
-    <div class="container" id="container">
+    <div class="video-container" id="container">
         <video id="video" autoplay muted playsinline></video>
     </div>
 
-    <div class="status-box" id="status">กำลังรอสัญญาณจากกล้อง...</div>
+    <div class="status-pill" id="status">กำลังสตาร์ทระบบ AI...</div>
 
     <script>
         const video = document.getElementById('video');
@@ -35,44 +38,64 @@
             angry: "โกรธ 😠", fearful: "กลัว 😨", disgusted: "รังเกียจ 🤢", surprised: "ตกใจ 😲"
         };
 
-        async function startApp() {
+        async function initAI() {
+            // แหล่งโหลด Model ที่เสถียร (vladmandic models)
             const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+            
             try {
-                // แก้ไขเป็น faceapi (ไม่มีขีดกลาง)
+                statusText.innerText = "1/2 กำลังโหลดโมเดลใบหน้า...";
                 await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+                statusText.innerText = "2/2 กำลังโหลดโมเดลอารมณ์...";
                 await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
                 
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+                statusText.innerText = "โหลด AI เสร็จแล้ว! กำลังเปิดกล้อง...";
+                setupCamera();
+            } catch (err) {
+                statusText.innerText = "❌ โหลด AI ไม่สำเร็จ โปรดรีเฟรชหน้าจอ";
+                console.error("Model Load Error:", err);
+            }
+        }
+
+        async function setupCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "user", width: 640, height: 480 } 
+                });
                 video.srcObject = stream;
             } catch (err) {
-                statusText.innerText = "ไม่สามารถโหลด AI หรือเปิดกล้องได้";
-                console.error(err);
+                statusText.innerText = "❌ เข้าถึงกล้องไม่ได้ (โปรดกดอนุญาต)";
             }
         }
 
         video.addEventListener('play', () => {
             const canvas = faceapi.createCanvasFromMedia(video);
             document.getElementById('container').append(canvas);
+            
             const displaySize = { width: video.clientWidth, height: video.clientHeight };
             faceapi.matchDimensions(canvas, displaySize);
 
             setInterval(async () => {
-                const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions()).withFaceExpressions();
+                const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+                    .withFaceExpressions();
+
                 const resizedDetections = faceapi.resizeResults(detections, displaySize);
                 canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+                
+                // วาดกรอบสี่เหลี่ยมรอบหน้า
                 faceapi.draw.drawDetections(canvas, resizedDetections);
 
                 if (detections.length > 0) {
                     const expressions = detections[0].expressions;
                     const topEmotion = Object.keys(expressions).reduce((a, b) => expressions[a] > expressions[b] ? a : b);
-                    statusText.innerText = "วันนี้คุณ: " + emotionThai[topEmotion];
+                    statusText.innerText = "สถานะ: " + emotionThai[topEmotion];
                 } else {
-                    statusText.innerText = "กรุณายืนหน้าให้ตรงกล้อง";
+                    statusText.innerText = "มองมาที่กล้องเพื่อตรวจจับความสุข";
                 }
-            }, 500);
+            }, 400);
         });
 
-        startApp();
+        // เริ่มต้นเมื่อโหลดหน้าเว็บ
+        window.onload = initAI;
     </script>
 </body>
 </html>
