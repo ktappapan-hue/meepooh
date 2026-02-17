@@ -11,18 +11,19 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            background-color: #f0f2f5;
+            background-color: #f8f9fa;
             margin: 0;
             padding: 20px;
         }
-        h1, h2 { color: #1a73e8; text-align: center; }
+        h2 { color: #003366; margin-bottom: 5px; }
+        h1 { color: #1a73e8; margin-top: 0; text-align: center; font-size: 1.5rem; }
         .container {
             position: relative;
-            width: 90%;
-            max-width: 640px;
-            border-radius: 15px;
+            width: 100%;
+            max-width: 500px;
+            border-radius: 20px;
             overflow: hidden;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
             background: #000;
         }
         canvas {
@@ -34,31 +35,34 @@
             width: 100%;
             display: block;
         }
-        .status {
-            margin-top: 15px;
-            padding: 10px 20px;
-            background: #fff;
-            border-radius: 20px;
+        .status-box {
+            margin-top: 20px;
+            padding: 15px 30px;
+            background: white;
+            border-radius: 50px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            font-size: 1.2rem;
             font-weight: bold;
+            color: #333;
+            border: 2px solid #1a73e8;
         }
     </style>
 </head>
 <body>
 
     <h2>โรงเรียนปราจิณราษฎรอำรุง</h2>
-    <h1>ระบบตรวจเช็คความสุขประจำวันของนักเรียนชั้น ม.2/1</h1>
+    <h1>ระบบตรวจเช็คความสุขประจำวัน ม.2/1</h1>
 
     <div class="container" id="container">
         <video id="video" autoplay muted playsinline></video>
     </div>
 
-    <div class="status" id="status">กำลังโหลด AI... โปรดรอสักครู่</div>
+    <div class="status-box" id="status">กำลังเริ่มต้นระบบ AI...</div>
 
     <script>
         const video = document.getElementById('video');
         const statusText = document.getElementById('status');
 
-        // แปลผลอารมณ์เป็นภาษาไทย
         const emotionThai = {
             neutral: "ปกติ 😐",
             happy: "มีความสุข/ดีใจ 😊",
@@ -69,59 +73,64 @@
             surprised: "ตกใจ 😲"
         };
 
-        // โหลด Model ของ AI
-        async function startApp() {
+        async function init() {
+            // โหลดโมเดลจาก CDN (เปลี่ยนชื่อจาก face-api เป็น faceapi)
             const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
             
-            await face-api.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-            await face-api.nets.faceExpressionNet.loadFromUri(MODEL_URL);
-            
-            statusText.innerText = "เปิดกล้อง...";
-            startVideo();
+            try {
+                statusText.innerText = "กำลังโหลดข้อมูลอารมณ์...";
+                await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+                await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
+                
+                statusText.innerText = "กำลังเปิดกล้อง...";
+                startVideo();
+            } catch (err) {
+                statusText.innerText = "เกิดข้อผิดพลาดในการโหลด AI";
+                console.error(err);
+            }
         }
 
-        // เริ่มต้นใช้งานกล้อง
         function startVideo() {
-            navigator.mediaDevices.getUserMedia({ video: {} })
-                .then(stream => {
-                    video.srcObject = stream;
-                    statusText.innerText = "ระบบพร้อมใช้งาน";
-                })
-                .catch(err => {
-                    console.error(err);
-                    statusText.innerText = "ไม่สามารถเข้าถึงกล้องได้";
-                });
+            navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: "user" } 
+            })
+            .then(stream => {
+                video.srcObject = stream;
+                statusText.innerText = "พร้อมใช้งาน! ส่องหน้าได้เลย";
+            })
+            .catch(err => {
+                statusText.innerText = "กรุณาอนุญาตให้เข้าถึงกล้อง";
+            });
         }
 
         video.addEventListener('play', () => {
-            const canvas = face-api.createCanvasFromMedia(video);
+            const canvas = faceapi.createCanvasFromMedia(video);
             document.getElementById('container').append(canvas);
             
             const displaySize = { width: video.clientWidth, height: video.clientHeight };
-            face-api.matchDimensions(canvas, displaySize);
+            faceapi.matchDimensions(canvas, displaySize);
 
             setInterval(async () => {
-                const detections = await face-api.detectAllFaces(video, new face-api.TinyFaceDetectorOptions())
+                const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
                     .withFaceExpressions();
 
-                const resizedDetections = face-api.resizeResults(detections, displaySize);
+                const resizedDetections = faceapi.resizeResults(detections, displaySize);
                 canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
                 
-                // วาดเส้นกรอบใบหน้า
-                face-api.draw.drawDetections(canvas, resizedDetections);
+                // วาดเส้นตีกรอบหน้า
+                faceapi.draw.drawDetections(canvas, resizedDetections);
 
                 if (detections.length > 0) {
-                    // หาอารมณ์ที่มีค่าคะแนนสูงสุด
                     const expressions = detections[0].expressions;
-                    const maxValue = Math.max(...Object.values(expressions));
-                    const emotion = Object.keys(expressions).filter(item => expressions[item] === maxValue);
-                    
-                    statusText.innerText = `อารมณ์ปัจจุบัน: ${emotionThai[emotion[0]] || emotion[0]}`;
+                    const topEmotion = Object.keys(expressions).reduce((a, b) => expressions[a] > expressions[b] ? a : b);
+                    statusText.innerText = "วันนี้คุณ: " + emotionThai[topEmotion];
+                } else {
+                    statusText.innerText = "ไม่พบใบหน้าในกล้อง";
                 }
-            }, 200);
+            }, 500);
         });
 
-        startApp();
+        init();
     </script>
 </body>
 </html>
